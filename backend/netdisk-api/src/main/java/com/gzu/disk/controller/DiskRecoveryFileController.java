@@ -116,5 +116,26 @@ public class DiskRecoveryFileController extends BaseController
        return toAjax(diskRecoveryFileService.refresh(ids,getUserId()));
     }
 
+    /**
+     * 一键清空回收站
+     */
+    @PreAuthorize("@ss.hasPermi('disk:recovery:remove')")
+    @Log(title = "一键清空回收站", businessType = BusinessType.DELETE)
+    @DeleteMapping("/deleteAll")
+    public AjaxResult deleteAll()
+    {
+        return toAjax(diskRecoveryFileService.deleteAllByUserId(getUserId()));
+    }
+
+    /**
+     * 一键恢复回收站所有文件
+     */
+    @PreAuthorize("@ss.hasPermi('disk:recovery:add')")
+    @Log(title = "一键恢复所有文件", businessType = BusinessType.UPDATE)
+    @PutMapping("/refreshAll")
+    public AjaxResult refreshAll()
+    {
+        return toAjax(diskRecoveryFileService.refreshAll(getUserId()));
+    }
 
 }

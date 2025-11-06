@@ -13,10 +13,14 @@ import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang3.ArrayUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import com.gzu.common.config.RuoYiConfig;
+import com.gzu.common.constant.Constants;
 import com.gzu.common.utils.DateUtils;
 import com.gzu.common.utils.StringUtils;
 import com.gzu.common.utils.uuid.IdUtils;
+import com.gzu.common.utils.hdfs.HdfsUtils;
 import org.apache.commons.io.FilenameUtils;
 
 /**
@@ -26,6 +30,8 @@ import org.apache.commons.io.FilenameUtils;
  */
 public class FileUtils
 {
+    private static final Logger log = LoggerFactory.getLogger(FileUtils.class);
+    
     public static String FILENAME_PATTERN = "[a-zA-Z0-9_\\-\\|\\.\\u4e00-\\u9fa5]+";
 
     /**
@@ -40,11 +46,35 @@ public class FileUtils
         FileInputStream fis = null;
         try
         {
+            // 判断是否使用HDFS
+            if (HdfsUtils.isHdfsEnabled()) {
+                // 尝试从HDFS读取
+                try {
+                    // 从文件路径中提取HDFS路径
+                    String hdfsPath = convertToHdfsPath(filePath);
+                    log.debug("尝试从HDFS读取文件: {}", hdfsPath);
+                    // 检查HDFS中文件是否存在
+                    if (HdfsUtils.exists(hdfsPath)) {
+                        log.info("从HDFS下载文件: {}", hdfsPath);
+                        // 从HDFS读取文件并写入输出流
+                        HdfsUtils.downloadFile(hdfsPath, os);
+                        return;
+                    } else {
+                        log.debug("HDFS中文件不存在，尝试本地: {}", hdfsPath);
+                    }
+                } catch (Exception e) {
+                    // HDFS读取失败，尝试本地文件系统
+                    log.warn("HDFS读取失败，尝试本地文件系统: {}", e.getMessage());
+                }
+            }
+            
+            // 使用本地文件系统
             File file = new File(filePath);
             if (!file.exists())
             {
                 throw new FileNotFoundException(filePath);
             }
+            log.debug("从本地读取文件: {}", filePath);
             fis = new FileInputStream(file);
             byte[] b = new byte[1024];
             int length;
@@ -62,6 +92,31 @@ public class FileUtils
             IOUtils.close(os);
             IOUtils.close(fis);
         }
+    }
+
+    /**
+     * 将文件路径转换为HDFS路径
+     */
+    private static String convertToHdfsPath(String filePath) {
+        log.debug("转换路径 - 输入: {}", filePath);
+        log.debug("Profile路径: {}", RuoYiConfig.getProfile());
+        log.debug("RESOURCE_PREFIX: {}", Constants.RESOURCE_PREFIX);
+        
+        // 如果是本地绝对路径，提取相对路径
+        String relativePath = filePath;
+        if (filePath.startsWith(RuoYiConfig.getProfile())) {
+            relativePath = filePath.substring(RuoYiConfig.getProfile().length());
+            log.debug("去除Profile后: {}", relativePath);
+        }
+        // 如果包含RESOURCE_PREFIX，提取后面的部分
+        if (relativePath.contains(Constants.RESOURCE_PREFIX)) {
+            int index = relativePath.indexOf(Constants.RESOURCE_PREFIX);
+            relativePath = relativePath.substring(index + Constants.RESOURCE_PREFIX.length());
+            log.debug("去除RESOURCE_PREFIX后: {}", relativePath);
+        }
+        String hdfsPath = HdfsUtils.buildHdfsPath(relativePath);
+        log.debug("最终HDFS路径: {}", hdfsPath);
+        return hdfsPath;
     }
 
     /**
@@ -86,19 +141,35 @@ public class FileUtils
      */
     public static String writeBytes(byte[] data, String uploadDir) throws IOException
     {
-        FileOutputStream fos = null;
         String pathName = "";
-        try
-        {
-            String extension = getFileExtendName(data);
-            pathName = DateUtils.datePath() + "/" + IdUtils.fastUUID() + "." + extension;
-            File file = FileUploadUtils.getAbsoluteFile(uploadDir, pathName);
-            fos = new FileOutputStream(file);
-            fos.write(data);
-        }
-        finally
-        {
-            IOUtils.close(fos);
+        String extension = getFileExtendName(data);
+        pathName = DateUtils.datePath() + "/" + IdUtils.fastUUID() + "." + extension;
+        
+        // 判断是否使用HDFS
+        if (HdfsUtils.isHdfsEnabled()) {
+            // 使用HDFS存储
+            String relativePath = uploadDir;
+            if (uploadDir.startsWith(RuoYiConfig.getProfile())) {
+                relativePath = uploadDir.substring(RuoYiConfig.getProfile().length());
+            }
+            if (!relativePath.startsWith("/")) {
+                relativePath = "/" + relativePath;
+            }
+            String hdfsPath = HdfsUtils.buildHdfsPath(relativePath + "/" + pathName);
+            HdfsUtils.uploadBytes(data, hdfsPath);
+        } else {
+            // 使用本地存储
+            FileOutputStream fos = null;
+            try
+            {
+                File file = FileUploadUtils.getAbsoluteFile(uploadDir, pathName);
+                fos = new FileOutputStream(file);
+                fos.write(data);
+            }
+            finally
+            {
+                IOUtils.close(fos);
+            }
         }
         return FileUploadUtils.getPathFileName(uploadDir, pathName);
     }
@@ -111,14 +182,39 @@ public class FileUtils
      */
     public static boolean deleteFile(String filePath)
     {
-        boolean flag = false;
-        File file = new File(filePath);
-        // 路径为文件且不为空则进行删除
-        if (file.isFile() && file.exists())
-        {
-            flag = file.delete();
+        log.info("=== 开始删除文件 ===");
+        log.info("输入路径: {}", filePath);
+        log.info("HDFS是否启用: {}", HdfsUtils.isHdfsEnabled());
+        log.info("是否包含RESOURCE_PREFIX: {}", filePath.contains(Constants.RESOURCE_PREFIX));
+        log.info("是否以Profile开头: {}", filePath.startsWith(RuoYiConfig.getProfile()));
+        
+        // 判断是否使用HDFS
+        if (HdfsUtils.isHdfsEnabled() && (filePath.contains(Constants.RESOURCE_PREFIX) || filePath.startsWith(RuoYiConfig.getProfile()))) {
+            try {
+                String hdfsPath = convertToHdfsPath(filePath);
+                log.info("转换后的HDFS路径: {}", hdfsPath);
+                boolean result = HdfsUtils.deleteFile(hdfsPath);
+                log.info("HDFS删除结果: {}", result);
+                return result;
+            } catch (IOException e) {
+                log.error("HDFS删除失败", e);
+                return false;
+            }
+        } else {
+            // 使用本地文件系统
+            log.info("使用本地文件系统删除");
+            boolean flag = false;
+            File file = new File(filePath);
+            // 路径为文件且不为空则进行删除
+            if (file.isFile() && file.exists())
+            {
+                flag = file.delete();
+                log.info("本地文件删除结果: {}", flag);
+            } else {
+                log.warn("本地文件不存在或不是文件: {}", filePath);
+            }
+            return flag;
         }
-        return flag;
     }
 
     /**

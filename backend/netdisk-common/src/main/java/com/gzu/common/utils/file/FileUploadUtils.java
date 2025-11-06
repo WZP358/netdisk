@@ -14,6 +14,7 @@ import com.gzu.common.exception.file.InvalidExtensionException;
 import com.gzu.common.utils.DateUtils;
 import com.gzu.common.utils.StringUtils;
 import com.gzu.common.utils.uuid.Seq;
+import com.gzu.common.utils.hdfs.HdfsUtils;
 
 /**
  * 文件上传工具类
@@ -112,9 +113,33 @@ public class FileUploadUtils
 
         if (StringUtils.isBlank(fileName)) fileName = extractFilename(file,isDatePath);
 
-        String absPath = getAbsoluteFile(baseDir, fileName).getAbsolutePath();
-        file.transferTo(Paths.get(absPath));
-        return getPathFileName(baseDir, fileName);
+        // 判断是否使用HDFS存储
+        if (HdfsUtils.isHdfsEnabled()) {
+            // 使用HDFS存储
+            String hdfsPath = buildHdfsPath(baseDir, fileName);
+            HdfsUtils.uploadFile(file, hdfsPath);
+            return getPathFileName(baseDir, fileName);
+        } else {
+            // 使用本地存储
+            String absPath = getAbsoluteFile(baseDir, fileName).getAbsolutePath();
+            file.transferTo(Paths.get(absPath));
+            return getPathFileName(baseDir, fileName);
+        }
+    }
+
+    /**
+     * 构建HDFS存储路径
+     */
+    private static String buildHdfsPath(String baseDir, String fileName) {
+        // 提取相对路径部分
+        String relativePath = baseDir;
+        if (baseDir.startsWith(RuoYiConfig.getProfile())) {
+            relativePath = baseDir.substring(RuoYiConfig.getProfile().length());
+        }
+        if (!relativePath.startsWith("/")) {
+            relativePath = "/" + relativePath;
+        }
+        return HdfsUtils.buildHdfsPath(relativePath + "/" + fileName);
     }
 
     /**

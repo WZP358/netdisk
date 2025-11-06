@@ -4,11 +4,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import cn.hutool.bloomfilter.BitMapBloomFilter;
 import cn.hutool.core.collection.CollectionUtil;
 import com.gzu.common.exception.ServiceException;
 import com.gzu.common.utils.DateUtils;
-import com.gzu.maple.commom.utils.BadWordFilter;
 import com.gzu.maple.commom.utils.SensitiveFilterUtil;
 import com.gzu.system.service.ISysConfigService;
 import org.springframework.beans.factory.annotation.Autowired;

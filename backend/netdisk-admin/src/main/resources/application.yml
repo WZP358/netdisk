@@ -99,3 +99,14 @@ xss:
   excludes: /system/notice
   # 匹配链接
   urlPatterns: /system/*,/monitor/*,/tool/*,/disk/*
+
+# Hadoop HDFS配置
+hdfs:
+  # 是否启用HDFS存储（true=使用HDFS, false=使用本地存储）
+  enable: true
+  # HDFS NameNode地址（Master节点）
+  namenode: hdfs://192.168.88.161:8020
+  # HDFS用户名
+  user: hadoop
+  # HDFS基础路径
+  basePath: /netdisk

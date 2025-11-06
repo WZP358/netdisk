@@ -113,6 +113,12 @@ export const constantRoutes = [
         component: () => import('@/views/disk/preview/video'),
         name: 'preview_video',
         meta: { title: '视频播放器' }
+      },
+      {
+        path: 'file',
+        component: () => import('@/views/disk/preview/filePreview'),
+        name: 'file_preview',
+        meta: { title: '文件预览' }
       }
     ]
   }

@@ -3,15 +3,9 @@ package com.gzu.disk.service.impl;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.io.IORuntimeException;
-import com.gzu.common.config.RuoYiConfig;
-import com.gzu.common.constant.Constants;
 import com.gzu.common.exception.ServiceException;
 import com.gzu.common.utils.DateUtils;
 import com.gzu.common.utils.SecurityUtils;
-import com.gzu.common.utils.StringUtils;
-import com.gzu.disk.controller.DiskFileController;
 import com.gzu.disk.domain.DiskFile;
 import com.gzu.disk.domain.DiskStorage;
 import com.gzu.disk.service.IDiskFileService;
@@ -158,5 +152,55 @@ public class DiskRecoveryFileServiceImpl implements IDiskRecoveryFileService
     @Override
     public int deleteDiskRecoveryFileByUserId(Long userId) {
         return diskRecoveryFileMapper.deleteDiskRecoveryFileByUserId(userId);
+    }
+
+    /**
+     * 一键清空回收站
+     * 
+     * @param userId 用户ID
+     * @return 结果
+     */
+    @Override
+    @Transactional
+    public int deleteAllByUserId(Long userId) {
+        // 查询用户所有回收站文件
+        DiskRecoveryFile queryParam = new DiskRecoveryFile();
+        queryParam.setCreateId(userId);
+        List<DiskRecoveryFile> diskRecoveryFiles = diskRecoveryFileMapper.selectDiskRecoveryFileList(queryParam);
+        
+        if (diskRecoveryFiles == null || diskRecoveryFiles.isEmpty()) {
+            return 0;
+        }
+        
+        // 获取所有回收站记录的ID
+        Long[] ids = diskRecoveryFiles.stream().map(DiskRecoveryFile::getId).toArray(Long[]::new);
+        
+        // 调用批量删除方法
+        return deleteDiskRecoveryFileByIds(ids);
+    }
+
+    /**
+     * 一键恢复回收站所有文件
+     * 
+     * @param userId 用户ID
+     * @return 结果
+     */
+    @Override
+    @Transactional
+    public int refreshAll(Long userId) {
+        // 查询用户所有回收站文件
+        DiskRecoveryFile queryParam = new DiskRecoveryFile();
+        queryParam.setCreateId(userId);
+        List<DiskRecoveryFile> diskRecoveryFiles = diskRecoveryFileMapper.selectDiskRecoveryFileList(queryParam);
+        
+        if (diskRecoveryFiles == null || diskRecoveryFiles.isEmpty()) {
+            return 0;
+        }
+        
+        // 获取所有回收站记录的ID
+        Long[] ids = diskRecoveryFiles.stream().map(DiskRecoveryFile::getId).toArray(Long[]::new);
+        
+        // 调用批量恢复方法
+        return refresh(ids, userId);
     }
 }

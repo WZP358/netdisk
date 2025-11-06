@@ -5,8 +5,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import cn.hutool.core.io.FileUtil;
-import cn.hutool.core.io.IORuntimeException;
 import com.gzu.common.config.RuoYiConfig;
 import com.gzu.common.constant.Constants;
 import com.gzu.common.exception.ServiceException;
@@ -14,6 +12,7 @@ import com.gzu.common.utils.DateUtils;
 import com.gzu.common.utils.SecurityUtils;
 import com.gzu.common.utils.StringUtils;
 import com.gzu.common.utils.file.FileUploadUtils;
+import com.gzu.common.utils.file.FileUtils;
 import com.gzu.common.utils.file.MimeTypeUtils;
 import com.gzu.disk.domain.DiskStorage;
 import com.gzu.disk.service.IDiskSensitiveWordService;
@@ -349,21 +348,44 @@ public class DiskFileServiceImpl implements IDiskFileService
 
     @Override
     public int deleteDiskFileByIdsAndRemoveFile(List<Long> delFileIds) {
+        log.info("=== 开始删除文件及其子文件 ===");
+        log.info("待删除的文件ID列表: {}", delFileIds);
+        
         List<DiskFile> allDelFiles = this.selectDiskFileListByIdsIgnoreDel(delFileIds.toArray(new Long[0]));
         List<DiskFile> allDiskFiles = this.selectAllByUserId(SecurityUtils.getUserId());
         delFileIds.forEach(parentId -> this.getChildPerms(allDiskFiles,allDelFiles,parentId));
+        
+        log.info("包含子文件后共需删除 {} 个文件", allDelFiles.size());
+        
         allDelFiles.forEach(diskFile -> {
+            log.info("--- 处理文件: {} (ID: {})", diskFile.getName(), diskFile.getId());
+            log.info("文件URL: {}", diskFile.getUrl());
+            log.info("是否为目录: {}", diskFile.getIsDir());
+            
             // 本地资源路径
             String localPath = RuoYiConfig.getProfile();
+            log.info("Profile路径: {}", localPath);
+            
             // 数据库资源地址
             String downloadPath = localPath + StringUtils.substringAfter(diskFile.getUrl(), Constants.RESOURCE_PREFIX);
+            log.info("构造的完整路径: {}", downloadPath);
+            
             try {
-                FileUtil.del(downloadPath);
-            } catch (IORuntimeException e) {
-                log.debug("文件删除失败 文件不存在 {0}",e);
+                // 使用FileUtils.deleteFile()以支持HDFS删除
+                boolean deleted = FileUtils.deleteFile(downloadPath);
+                if (deleted) {
+                    log.info("✓ 文件删除成功: {}", diskFile.getName());
+                } else {
+                    log.warn("✗ 文件删除失败或文件不存在: {}", diskFile.getName());
+                }
+            } catch (Exception e) {
+                log.error("✗ 文件删除异常: {}", diskFile.getName(), e);
             }
         });
-        return this.deleteDiskFileByIds(allDelFiles.stream().map(DiskFile::getId).toArray(Long[]::new));
+        
+        int result = this.deleteDiskFileByIds(allDelFiles.stream().map(DiskFile::getId).toArray(Long[]::new));
+        log.info("=== 数据库记录删除完成，共删除 {} 条记录 ===", result);
+        return result;
     }
 
     @Override

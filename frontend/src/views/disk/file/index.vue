@@ -196,7 +196,7 @@
                   </div>
                 </el-checkbox-button>
                 <el-checkbox-button  v-if="itme.isDir===0&&itme.type===0" @change="handleCheckboxChange" :label="itme.id" :key="itme.id" size="medium">
-                  <div class="grid-content bg-purple">
+                  <div @dblclick="handlePreview(itme)" class="grid-content bg-purple">
                     <image-preview :src="itme.url" :width="100" :height="100"/>
                     <div v-on:mouseover="mouseEnter(index)" @mouseleave="mouseLeave(index)" style='width:80px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;'>{{itme.name}}</div>
                   </div>
@@ -210,19 +210,19 @@
                   </div>
                 </el-checkbox-button>
                 <el-checkbox-button  v-if="itme.isDir===0&&itme.type===2" @change="handleCheckboxChange" :label="itme.id" :key="itme.id" size="medium">
-                  <div class="grid-content bg-purple">
+                  <div @dblclick="handlePreview(itme)" class="grid-content bg-purple">
                     <img style="width: 100px;height: 100px" src="@/assets/images/file_open.png"/>
                     <div v-on:mouseover="mouseEnter(index)" @mouseleave="mouseLeave(index)"  style='width:80px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;'>{{itme.name}}</div>
                   </div>
                 </el-checkbox-button>
                 <el-checkbox-button  v-if="itme.isDir===0&&itme.type===3" @change="handleCheckboxChange" :label="itme.id" :key="itme.id" size="medium">
-                  <div class="grid-content bg-purple">
+                  <div @dblclick="handlePreview(itme)" class="grid-content bg-purple">
                     <img style="width: 100px;height: 100px" src="@/assets/images/file_music.png"/>
                     <div v-on:mouseover="mouseEnter(index)" @mouseleave="mouseLeave(index)" style='width:80px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;'>{{itme.name}}</div>
                   </div>
                 </el-checkbox-button>
                 <el-checkbox-button  v-if="itme.isDir===0&&itme.type===4" @change="handleCheckboxChange" :label="itme.id" :key="itme.id" size="medium">
-                  <div class="grid-content bg-purple">
+                  <div @dblclick="handlePreview(itme)" class="grid-content bg-purple">
                     <img style="width: 100px;height: 100px" src="@/assets/images/file_open.png"></img>
                     <div v-on:mouseover="mouseEnter(index)" @mouseleave="mouseLeave(index)"  style='width:80px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;'>{{itme.name}}</div>
                   </div>
@@ -275,6 +275,7 @@
     <el-dialog :title="title" :visible.sync="uploadOpen" width="500px" append-to-body>
 <!--          <file-upload :fileSize="100" :fileType="fileType" v-model="form.url"/>-->
           <el-upload
+            ref="fileUpload"
             class="upload-demo"
             drag
             :action="uploadFileUrl"
@@ -913,10 +914,28 @@ export default {
       this.getList();
     },
     handlePreview(row) {
-      if (row.type===1) {
-        //视频
-        this.$router.push({ name: "preview_video" , params: {url: row.url,name:row.name} });
-      }
+      console.log('双击预览文件:', row);
+      console.log('文件信息:', {
+        url: row.url,
+        name: row.name,
+        size: row.size,
+        type: row.type
+      });
+      
+      // 使用统一的文件预览页面
+      this.$router.push({ 
+        name: "file_preview", 
+        params: {
+          url: row.url,
+          name: row.name,
+          size: row.size,
+          type: row.type
+        } 
+      }).then(() => {
+        console.log('路由跳转成功');
+      }).catch(err => {
+        console.error('路由跳转失败:', err);
+      });
     }
   }
 };

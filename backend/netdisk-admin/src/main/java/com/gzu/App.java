@@ -12,9 +12,15 @@ import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
 @SpringBootApplication(exclude = { DataSourceAutoConfiguration.class })
 public class App
 {
+    static {
+        // 必须在类加载时就设置，确保在任何Hadoop代码执行前生效
+        System.setProperty("java.security.manager", "allow");
+    }
+    
     public static void main(String[] args)
     {
         // System.setProperty("spring.devtools.restart.enabled", "false");
+        
         SpringApplication.run(App.class, args);
         System.out.println("(♥◠‿◠)ﾉﾞ  启动成功   ლ(´ڡ`ლ)ﾞ  \n" +
                 " .-------.       ____     __        \n" +

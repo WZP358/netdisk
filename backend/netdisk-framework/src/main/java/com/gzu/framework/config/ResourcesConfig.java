@@ -30,8 +30,10 @@ public class ResourcesConfig implements WebMvcConfigurer
     public void addResourceHandlers(ResourceHandlerRegistry registry)
     {
         /** 本地文件上传路径 */
-        registry.addResourceHandler(Constants.RESOURCE_PREFIX + "/**")
-                .addResourceLocations("file:" + RuoYiConfig.getProfile() + "/");
+        // 注释掉静态资源映射，改用Controller处理，以支持HDFS
+        // registry.addResourceHandler(Constants.RESOURCE_PREFIX + "/**")
+        //         .addResourceLocations("file:" + RuoYiConfig.getProfile() + "/");
+        // 现在所有文件访问都通过 /common/download/resource 接口处理，支持HDFS和本地双模式
 
         /** swagger配置 */
         registry.addResourceHandler("/swagger-ui/**")

@@ -467,10 +467,15 @@ export default {
       this.currentIndex = -1;
     },
     handlePreview(row) {
-      if (row.type===1) {
-        //视频
-        this.$router.push({ name: "preview_video" , params: {url: row.url,name:row.name} });
-      }
+      this.$router.push({ 
+        name: "file_preview", 
+        params: {
+          url: row.url,
+          name: row.name,
+          size: row.size,
+          type: row.type
+        } 
+      });
     }
   }
 };

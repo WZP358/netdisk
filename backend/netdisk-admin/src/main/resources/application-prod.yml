@@ -101,3 +101,14 @@ swagger:
   enabled: true
   # 请求前缀
   pathMapping: /prod-api
+
+# Hadoop HDFS配置
+hdfs:
+  # 是否启用HDFS存储（true=使用HDFS, false=使用本地存储）
+  enable: true
+  # HDFS NameNode地址（Master节点: 192.168.88.161）
+  namenode: hdfs://192.168.88.161:8020
+  # HDFS用户名
+  user: hadoop
+  # HDFS基础路径
+  basePath: /netdisk

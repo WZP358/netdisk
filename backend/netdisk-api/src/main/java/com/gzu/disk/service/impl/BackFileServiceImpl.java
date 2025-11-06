@@ -2,6 +2,7 @@ package com.gzu.disk.service.impl;
 
 import com.gzu.common.config.RuoYiConfig;
 import com.gzu.common.constant.Constants;
+import com.gzu.common.utils.hdfs.HdfsUtils;
 import com.gzu.disk.domain.BackChunk;
 import com.gzu.disk.domain.BackFilelist;
 import com.gzu.disk.domain.vo.CheckChunkVO;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletResponse;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -61,10 +63,20 @@ public class BackFileServiceImpl implements IBackFileService {
         int result = Constants.UPDATE_FAIL;
         MultipartFile file = chunk.getFile();
         log.debug("file originName: {}, chunkNumber: {}", file.getOriginalFilename(), chunk.getChunkNumber());
-        Path path = Paths.get(generatePath(RuoYiConfig.getUploadPath() + folderPath, chunk));
+        
         try {
-            Files.write(path, chunk.getFile().getBytes());
-            log.debug("文件 {} 写入成功, md5:{}", chunk.getFilename(), chunk.getIdentifier());
+            // 判断是否使用HDFS
+            if (HdfsUtils.isHdfsEnabled()) {
+                // 使用HDFS存储分片
+                String hdfsPath = generateHdfsPath(folderPath, chunk);
+                HdfsUtils.uploadBytes(chunk.getFile().getBytes(), hdfsPath);
+                log.debug("文件块上传到HDFS成功 {} , md5:{}", chunk.getFilename(), chunk.getIdentifier());
+            } else {
+                // 使用本地存储
+                Path path = Paths.get(generatePath(RuoYiConfig.getUploadPath() + folderPath, chunk));
+                Files.write(path, chunk.getFile().getBytes());
+                log.debug("文件块写入本地成功 {} , md5:{}", chunk.getFilename(), chunk.getIdentifier());
+            }
             result = backChunkMapper.insertBackChunk(chunk);
             //写入数据库
         } catch (IOException e) {
@@ -73,6 +85,15 @@ public class BackFileServiceImpl implements IBackFileService {
             return Constants.UPDATE_FAIL;
         }
         return result;
+    }
+    
+    /**
+     * 生成HDFS块文件路径
+     */
+    private String generateHdfsPath(String uploadFolder, BackChunk chunk) {
+        String relativePath = uploadFolder + "/" + chunk.getIdentifier() + "/" 
+                            + chunk.getFilename() + "-" + chunk.getChunkNumber();
+        return HdfsUtils.buildHdfsPath(relativePath);
     }
 
     @Override
@@ -108,15 +129,49 @@ public class BackFileServiceImpl implements IBackFileService {
     @Transactional(rollbackFor = Exception.class)
     public String mergeFile(BackFilelist fileInfo) {
         String filename = fileInfo.getFilename();
-        String file = RuoYiConfig.getUploadPath() + folderPath + "/" + fileInfo.getIdentifier() + "/" + filename;
-        String folder = RuoYiConfig.getUploadPath() + folderPath + "/" + fileInfo.getIdentifier();
         String url = folderPath + "/" + fileInfo.getIdentifier() + "/" + filename;
-        merge(file, folder, filename);
+        
+        try {
+            // 判断是否使用HDFS
+            if (HdfsUtils.isHdfsEnabled()) {
+                // HDFS模式：合并文件块
+                // 查询该文件的所有分片信息，获取总分片数
+                BackChunk queryChunk = new BackChunk();
+                queryChunk.setIdentifier(fileInfo.getIdentifier());
+                List<BackChunk> chunks = backChunkMapper.selectBackChunkList(queryChunk);
+                
+                if (chunks == null || chunks.isEmpty()) {
+                    log.error("未找到文件分片信息: {}", fileInfo.getIdentifier());
+                    return null;
+                }
+                
+                // 获取总分片数
+                int totalChunks = chunks.stream()
+                    .mapToInt(BackChunk::getChunkNumber)
+                    .max()
+                    .orElse(0);
+                
+                String hdfsFolder = HdfsUtils.buildHdfsPath(folderPath + "/" + fileInfo.getIdentifier());
+                String hdfsTargetFile = HdfsUtils.buildHdfsPath(url);
+                mergeHdfs(hdfsTargetFile, hdfsFolder, filename, totalChunks);
+                fileInfo.setLocation(hdfsTargetFile);
+            } else {
+                // 本地模式
+                String file = RuoYiConfig.getUploadPath() + folderPath + "/" + fileInfo.getIdentifier() + "/" + filename;
+                String folder = RuoYiConfig.getUploadPath() + folderPath + "/" + fileInfo.getIdentifier();
+                merge(file, folder, filename);
+                fileInfo.setLocation(file);
+            }
+        } catch (Exception e) {
+            log.error("合并文件失败", e);
+            return null;
+        }
+        
         //当前文件已存在数据库中时,返回已存在标识
         if (backFilelistMapper.selectSingleBackFilelist(fileInfo) > 0) {
             return url;
         }
-        fileInfo.setLocation(file);
+        
         fileInfo.setUrl(url);
         int i = backFilelistMapper.insertBackFilelist(fileInfo);
         if (i > 0) {
@@ -127,6 +182,31 @@ public class BackFileServiceImpl implements IBackFileService {
             backChunkMapper.deleteBackChunkByIdentifier(backChunk);
         }
         return url;
+    }
+    
+    /**
+     * HDFS文件合并
+     */
+    private void mergeHdfs(String targetFile, String folder, String filename, Integer totalChunks) throws IOException {
+        ByteArrayOutputStream mergedOutputStream = new ByteArrayOutputStream();
+        
+        // 按顺序读取每个分片并合并
+        for (int i = 1; i <= totalChunks; i++) {
+            String chunkPath = folder + "/" + filename + "-" + i;
+            try {
+                byte[] chunkData = HdfsUtils.readFileBytes(chunkPath);
+                mergedOutputStream.write(chunkData);
+                // 删除已合并的分片
+                HdfsUtils.deleteFile(chunkPath);
+            } catch (IOException e) {
+                log.error("读取或删除HDFS分片文件失败: {}", chunkPath, e);
+                throw e;
+            }
+        }
+        
+        // 将合并后的文件写入HDFS
+        HdfsUtils.uploadBytes(mergedOutputStream.toByteArray(), targetFile);
+        log.info("HDFS文件合并完成: {}", targetFile);
     }
 
     /**

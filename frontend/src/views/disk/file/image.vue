@@ -100,7 +100,7 @@
         <div style="margin-left: 20px" v-for="(itme,index) in fileList">
           <div style="float: left;width: 120px;height: 130px;margin-left: 25px;margin-right: 25px;margin-top: 20px;position: relative;" v-if="itme.isDir===0&&itme.type===0">
             <el-checkbox-button @change="handleCheckboxChange" :label="itme.id" :key="itme.id" size="medium">
-              <div  v-on:mouseover="mouseEnter(index)" @mouseleave="mouseLeave(index)" class="grid-content bg-purple">
+              <div @dblclick="handlePreview(itme)" v-on:mouseover="mouseEnter(index)" @mouseleave="mouseLeave(index)" class="grid-content bg-purple">
                 <image-preview :src="itme.url" :width="100" :height="100"/>
                 <div style='width:80px;white-space:nowrap;text-overflow:ellipsis;overflow:hidden;'>{{itme.name}}</div>
               </div>
@@ -464,6 +464,17 @@ export default {
     mouseLeave(index) {
       this.currentIndex = -1;
     },
+    handlePreview(row) {
+      this.$router.push({ 
+        name: "file_preview", 
+        params: {
+          url: row.url,
+          name: row.name,
+          size: row.size,
+          type: row.type
+        } 
+      });
+    }
   }
 }
 </script>

@@ -64,4 +64,20 @@ public interface IDiskRecoveryFileService
     int refresh(Long[] ids,Long userId);
 
     int deleteDiskRecoveryFileByUserId(Long userId);
+
+    /**
+     * 一键清空回收站
+     * 
+     * @param userId 用户ID
+     * @return 结果
+     */
+    int deleteAllByUserId(Long userId);
+
+    /**
+     * 一键恢复回收站所有文件
+     * 
+     * @param userId 用户ID
+     * @return 结果
+     */
+    int refreshAll(Long userId);
 }

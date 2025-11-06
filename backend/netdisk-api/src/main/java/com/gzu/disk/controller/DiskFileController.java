@@ -3,7 +3,6 @@ package com.gzu.disk.controller;
 import java.io.*;
 import java.util.*;
 import java.util.stream.Collectors;
-import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
 import cn.hutool.core.io.FileUtil;
@@ -12,7 +11,6 @@ import cn.hutool.core.util.ZipUtil;
 import com.gzu.common.config.RuoYiConfig;
 import com.gzu.common.constant.Constants;
 import com.gzu.common.exception.ServiceException;
-import com.gzu.common.utils.DateUtils;
 import com.gzu.common.utils.SecurityUtils;
 import com.gzu.common.utils.StringUtils;
 import com.gzu.common.utils.file.FileUploadUtils;
@@ -21,8 +19,6 @@ import com.gzu.disk.domain.*;
 import com.gzu.disk.domain.bo.DownloadBo;
 import com.gzu.disk.service.*;
 import com.gzu.framework.config.ServerConfig;
-import com.gzu.maple.commom.utils.BadWordFilter;
-import com.gzu.system.service.ISysConfigService;
 import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -214,28 +210,55 @@ public class DiskFileController extends BaseController
     {
         try
         {
+            log.info("========== 文件上传开始 ==========");
+            log.info("原始文件名: {}", file.getOriginalFilename());
+            log.info("文件大小: {} bytes", file.getSize());
+            log.info("父文件夹ID: {}", parentId);
+            
             // 上传文件路径
             String filePath = RuoYiConfig.getUploadPath();
+            log.info("基础上传路径: {}", filePath);
+            
             // 获取当前用户本人的存储目录
             DiskStorage diskStorage = diskStorageService.selectDiskStorageByUserId(SecurityUtils.getUserId());
-            if (Objects.isNull(diskStorage)) throw new ServiceException("未初始化存储空间");
-            if (diskStorage.getTotalCapacity()-diskStorage.getUsedCapacity()<=0) throw new ServiceException("存储空间不足");
+            if (Objects.isNull(diskStorage)) {
+                log.error("存储空间未初始化");
+                throw new ServiceException("未初始化存储空间");
+            }
+            log.info("用户存储目录: {}", diskStorage.getBaseDir());
+            log.info("存储空间: 已用={}, 总容量={}", diskStorage.getUsedCapacity(), diskStorage.getTotalCapacity());
+            
+            if (diskStorage.getTotalCapacity()-diskStorage.getUsedCapacity()<=0) {
+                log.error("存储空间不足");
+                throw new ServiceException("存储空间不足");
+            }
+            
             if (parentId.equals(0L)) {
                 filePath = filePath+"/"+diskStorage.getBaseDir();
             } else {
                 DiskFile parentIdFile = diskFileService.selectDiskFileById(parentId);
-                if (Objects.isNull(parentIdFile)) throw new ServiceException("父文件夹不存在");
+                if (Objects.isNull(parentIdFile)) {
+                    log.error("父文件夹不存在: {}", parentId);
+                    throw new ServiceException("父文件夹不存在");
+                }
                 String[] localPaths = RuoYiConfig.getUploadPath().split("/");
                 filePath = filePath+"/"+diskStorage.getBaseDir()+parentIdFile.getUrl()
                         .replace(Constants.RESOURCE_PREFIX,"").replace(localPaths[localPaths.length-1],"")
                         .replace("/"+diskStorage.getBaseDir(),"");
             }
+            log.info("最终上传路径: {}", filePath);
+            
             diskSensitiveWordService.filterSensitiveWord(file.getOriginalFilename());
             DiskFile diskFile = new DiskFile();
             String fileName = RandomUtil.randomString(4)+"_"+file.getOriginalFilename();
             diskFile.setName(fileName);
+            log.info("生成的文件名: {}", fileName);
+            
             // 上传并返回新文件名称
+            log.info("开始上传文件到存储系统...");
             fileName = FileUploadUtils.upload(filePath,false, file,fileName);
+            log.info("文件上传成功，返回路径: {}", fileName);
+            
             String url = serverConfig.getUrl()  + fileName;
             diskFile.setCreateId(getUserId());
             diskFile.setOldName(file.getOriginalFilename());
@@ -246,7 +269,11 @@ public class DiskFileController extends BaseController
             diskFile.setSize(file.getSize());
             String extension = FileUploadUtils.getExtension(file);
             diskFile.setType(diskFileService.getType(extension));
+            
+            log.info("保存文件记录到数据库...");
             diskFileService.save(diskFile,diskStorage);
+            log.info("文件记录保存成功");
+            
             AjaxResult ajax = AjaxResult.success();
             ajax.put("url", url);
             ajax.put("fileName", fileName);
@@ -254,10 +281,15 @@ public class DiskFileController extends BaseController
             ajax.put("originalFilename", file.getOriginalFilename());
             ajax.put("size", file.getSize());
             ajax.put("type", extension);
+            
+            log.info("========== 文件上传完成 ==========");
             return ajax;
         }
         catch (Exception e)
         {
+            log.error("========== 文件上传失败 ==========", e);
+            log.error("错误类型: {}", e.getClass().getName());
+            log.error("错误信息: {}", e.getMessage());
             return AjaxResult.error(e.getMessage());
         }
     }
@@ -302,25 +334,29 @@ public class DiskFileController extends BaseController
             dest = dest + RandomUtil.randomString(6);
         }
         FileUtil.mkdir(dest);
-        List<String> downloadPaths = new ArrayList<>();
-
-        diskFiles.forEach(diskFile -> {
-            // 本地资源路径
-            String localPath = RuoYiConfig.getProfile();
-            // 数据库资源地址
-            String downloadPath = localPath + StringUtils.substringAfter(diskFile.getUrl(), Constants.RESOURCE_PREFIX);
-            downloadPaths.add(downloadPath);
-        });
-        String downloadPath = dest + ".zip";
 
         try {
             String finalDest = dest;
-            try {
-                downloadPaths.forEach(path -> FileUtil.copy(path, finalDest,true));
-            } catch (Exception e) {
-                log.debug("diskfile copy文件报错");
-            }
+            // 从HDFS或本地复制文件到临时目录
+            diskFiles.forEach(diskFile -> {
+                try {
+                    // 本地资源路径
+                    String localPath = RuoYiConfig.getProfile();
+                    // 数据库资源地址
+                    String filePath = localPath + StringUtils.substringAfter(diskFile.getUrl(), Constants.RESOURCE_PREFIX);
+                    
+                    // 使用FileUtils.writeBytes，它会自动判断HDFS还是本地
+                    String destFilePath = finalDest + "/" + diskFile.getName();
+                    try (FileOutputStream fos = new FileOutputStream(destFilePath)) {
+                        FileUtils.writeBytes(filePath, fos);
+                    }
+                } catch (Exception e) {
+                    log.error("复制文件失败: {}", diskFile.getName(), e);
+                }
+            });
+            
             // 调用zip方法进行压缩
+            String downloadPath = dest + ".zip";
             ZipUtil.zip(dest, downloadPath);
             byte[] data = FileUtil.readBytes(FileUtil.file(downloadPath));
             response.reset();
@@ -330,13 +366,19 @@ public class DiskFileController extends BaseController
             response.addHeader("Content-Length", "" + data.length);
             response.setContentType("application/octet-stream; charset=UTF-8");
             IOUtils.write(data, response.getOutputStream());
-        } catch (IOException e) {
-            log.error("diskFile 下载文件失败", e);
-        } finally {
+            
+            // 清理临时文件
             FileUtil.del(dest);
             FileUtils.deleteFile(downloadPath);
+        } catch (IOException e) {
+            log.error("diskFile 下载文件失败", e);
+            // 确保清理临时文件
+            try {
+                FileUtil.del(dest);
+            } catch (Exception ex) {
+                log.error("清理临时文件失败", ex);
+            }
         }
-
     }
 
 }

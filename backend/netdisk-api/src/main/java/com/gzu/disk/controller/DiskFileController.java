@@ -15,6 +15,7 @@ import com.gzu.common.utils.SecurityUtils;
 import com.gzu.common.utils.StringUtils;
 import com.gzu.common.utils.file.FileUploadUtils;
 import com.gzu.common.utils.file.FileUtils;
+import com.gzu.common.utils.hdfs.HdfsUtils;
 import com.gzu.disk.domain.*;
 import com.gzu.disk.domain.bo.DownloadBo;
 import com.gzu.disk.service.*;
@@ -24,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -70,15 +70,22 @@ public class DiskFileController extends BaseController
 
     @Autowired
     private IDiskSensitiveWordService diskSensitiveWordService;
+    
+    @Autowired(required = false)
+    private IFileWatcherService fileWatcherService;
 
     private static final String FILE_DELIMETER = ",";
 
+    @Autowired
+    private IFileConsistencyService fileConsistencyService;
+
     /**
      * 查询文件列表
+     * @param autoClean 是否自动清理无效文件（true=自动过滤并清理不存在的文件）
      */
     @PreAuthorize("@ss.hasPermi('disk:file:list')")
     @GetMapping("/list")
-    public TableDataInfo list(DiskFile diskFile)
+    public TableDataInfo list(DiskFile diskFile, Boolean autoClean)
     {
         startPage("id desc");
         diskFile.setCreateId(getUserId());
@@ -87,6 +94,44 @@ public class DiskFileController extends BaseController
         diskStorageService.insertDiskStorage(diskStorage);
         List<DiskFile> list = diskFileService.selectDiskFileList(diskFile);
         List<DiskFile> allDiskFiles = diskFileService.selectAll();
+        
+        // 如果启用自动清理，验证文件存在性
+        if (autoClean != null && autoClean) {
+            log.info("开始验证文件列表的有效性...");
+            List<DiskFile> validFiles = new ArrayList<>();
+            List<Long> invalidFileIds = new ArrayList<>();
+            
+            for (DiskFile f : list) {
+                // 目录始终保留
+                if (f.getIsDir() == 1) {
+                    validFiles.add(f);
+                } else {
+                    // 检查文件是否存在
+                    if (fileConsistencyService.checkFileExists(f.getId())) {
+                        validFiles.add(f);
+                    } else {
+                        log.warn("发现无效文件: {} (ID: {})", f.getName(), f.getId());
+                        invalidFileIds.add(f.getId());
+                    }
+                }
+            }
+            
+            // 异步清理无效文件记录
+            if (!invalidFileIds.isEmpty()) {
+                log.info("发现 {} 个无效文件，开始清理...", invalidFileIds.size());
+                new Thread(() -> {
+                    try {
+                        fileConsistencyService.checkAndCleanInvalidFiles(getUserId());
+                        log.info("无效文件清理完成");
+                    } catch (Exception e) {
+                        log.error("清理无效文件时出错", e);
+                    }
+                }).start();
+            }
+            
+            list = validFiles;
+        }
+        
         list.forEach(f -> {
             if (f.getIsDir()==1) {
                 List<DiskFile> allChildFiles = new ArrayList<>();
@@ -153,10 +198,39 @@ public class DiskFileController extends BaseController
             String path = StringUtils.substringAfter(diskFile.getUrl(), Constants.RESOURCE_PREFIX);
             // 数据库资源地址
             String filePath = localPath + path;
-            FileUtil.mkdir(filePath);
+            
+            // 判断是否使用HDFS存储
+            if (HdfsUtils.isHdfsEnabled()) {
+                // 在HDFS中创建目录
+                try {
+                    String hdfsPath = HdfsUtils.buildHdfsPath(path);
+                    HdfsUtils.mkdirs(hdfsPath);
+                    log.info("HDFS中成功创建目录: {}", hdfsPath);
+                } catch (IOException e) {
+                    log.error("HDFS创建目录失败: {}", e.getMessage(), e);
+                    throw new ServiceException("创建文件夹失败: " + e.getMessage());
+                }
+            } else {
+                // 本地文件系统创建目录
+                FileUtil.mkdir(filePath);
+            }
+            
             diskFile.setType(5);
         }
-        return toAjax(diskFileService.insertDiskFile(diskFile));
+        
+        int result = diskFileService.insertDiskFile(diskFile);
+        
+        // 重新加载文件监控（如果启用）
+        if (result > 0 && fileWatcherService != null && fileWatcherService.isWatching()) {
+            try {
+                fileWatcherService.reloadWatchDirectories();
+                log.info("已重新加载文件监控");
+            } catch (Exception e) {
+                log.warn("重新加载文件监控失败", e);
+            }
+        }
+        
+        return toAjax(result);
     }
 
     /**
@@ -205,8 +279,7 @@ public class DiskFileController extends BaseController
      * 通用上传请求（单个）
      */
     @PostMapping("/upload/{parentId}")
-    @Transactional
-    public AjaxResult uploadFile(MultipartFile file,@PathVariable Long parentId) throws Exception
+    public AjaxResult uploadFile(MultipartFile file,@PathVariable Long parentId)
     {
         try
         {
@@ -250,9 +323,10 @@ public class DiskFileController extends BaseController
             
             diskSensitiveWordService.filterSensitiveWord(file.getOriginalFilename());
             DiskFile diskFile = new DiskFile();
-            String fileName = RandomUtil.randomString(4)+"_"+file.getOriginalFilename();
+            // 使用原始文件名，不添加随机前缀
+            String fileName = file.getOriginalFilename();
             diskFile.setName(fileName);
-            log.info("生成的文件名: {}", fileName);
+            log.info("使用原始文件名: {}", fileName);
             
             // 上传并返回新文件名称
             log.info("开始上传文件到存储系统...");

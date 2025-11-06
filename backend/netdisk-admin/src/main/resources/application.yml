@@ -35,6 +35,7 @@ server:
 logging:
   level:
     com.gzu: debug
+    com.gzu.disk.mapper: debug
     org.springframework: warn
 
 # 用户配置
@@ -110,3 +111,15 @@ hdfs:
   user: hadoop
   # HDFS基础路径
   basePath: /netdisk
+
+# 文件一致性检查配置
+disk:
+  consistency:
+    # 是否启用定时检查（true=启用定时任务, false=关闭）
+    # 注意：启用实时检查后，可以关闭定时任务以节省资源
+    enabled: true
+    # 定时任务执行时间（Cron表达式）
+    # 每5秒执行一次（用于测试）
+    cron: 0/5 * * * * ?
+    # 是否在列表加载时自动验证文件（true=每次加载列表都验证，false=不验证）
+    autoCleanOnList: true

@@ -66,6 +66,12 @@
             <artifactId>netdisk-api</artifactId>
         </dependency>
 
+        <!-- maple-common模块 -->
+        <dependency>
+            <groupId>com.gzu</groupId>
+            <artifactId>maple-common</artifactId>
+        </dependency>
+
     </dependencies>
 
     <build>

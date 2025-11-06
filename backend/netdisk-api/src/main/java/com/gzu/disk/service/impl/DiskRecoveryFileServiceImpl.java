@@ -142,7 +142,7 @@ public class DiskRecoveryFileServiceImpl implements IDiskRecoveryFileService
         if (diskRecoveryFiles.size()==0) throw new ServiceException("回收的文件不存在");
         List<Long> decoveryFileIds = diskRecoveryFiles.stream().map(DiskRecoveryFile::getFileId).collect(Collectors.toList());
         List<DiskFile> allDecoveryFiles = diskFileService.selectDiskFileListByIdsIgnoreDel(decoveryFileIds.toArray(new Long[0]));
-        List<DiskFile> allDiskFiles = diskFileService.selectAllByUserId(userId);
+        List<DiskFile> allDiskFiles = diskFileService.selectAllByUserIdIgnoreDel(userId);
         decoveryFileIds.forEach(parentId -> diskFileService.getChildPerms(allDiskFiles,allDecoveryFiles,parentId));
         diskFileService.refresh(allDecoveryFiles.stream().map(DiskFile::getId)
                 .toArray(Long[]::new));

@@ -84,6 +84,8 @@ public interface IDiskFileService
 
     List<DiskFile> selectAllByUserId(Long userId);
 
+    List<DiskFile> selectAllByUserIdIgnoreDel(Long userId);
+
     List<Map<String,Object>> typeCapacityStats(Long userId);
 
     String getTypeName(Integer type);

@@ -576,6 +576,9 @@ export default {
         this.queryParams.params["beginCreateTime"] = this.daterangeCreateTime[0];
         this.queryParams.params["endCreateTime"] = this.daterangeCreateTime[1];
       }
+      // 启用自动清理无效文件
+      this.queryParams.autoClean = true;
+      
       listFile(this.queryParams).then(response => {
         this.fileList = response.rows;
         this.total = response.total;
@@ -668,18 +671,39 @@ export default {
         if (valid) {
           this.form.parentId = this.queryParams.parentId;
           this.form.isDir = 1;
+          
           if (this.form.id != null) {
+            // 修改文件夹
             updateFile(this.form).then(response => {
               this.$modal.msgSuccess("修改成功");
               this.openDir = false;
               this.getList();
             });
           } else {
-            addFile(this.form).then(response => {
-              this.$modal.msgSuccess("新增成功");
-              this.openDir = false;
-              this.getList();
-            });
+            // 新建文件夹 - 检查同名
+            const isDuplicate = this.fileList.some(item => item.name === this.form.name && item.isDir === 1);
+            if (isDuplicate) {
+              this.$modal.confirm('当前目录已存在同名文件夹"' + this.form.name + '"，是否覆盖？').then(() => {
+                // 用户确认覆盖
+                addFile(this.form).then(response => {
+                  this.$modal.msgSuccess("新增成功");
+                  this.openDir = false;
+                  this.getList();
+                }).catch(() => {
+                  this.$modal.msgError("新增失败");
+                });
+              }).catch(() => {
+                // 用户取消
+                this.$modal.msgWarning("已取消操作");
+              });
+            } else {
+              // 没有同名文件夹，直接创建
+              addFile(this.form).then(response => {
+                this.$modal.msgSuccess("新增成功");
+                this.openDir = false;
+                this.getList();
+              });
+            }
           }
         }
       });
@@ -722,6 +746,26 @@ export default {
     },
     // 上传前校检格式和大小
     handleBeforeUpload(file) {
+      // 检查同名文件
+      const isDuplicate = this.fileList.some(item => item.name === file.name);
+      if (isDuplicate) {
+        return new Promise((resolve, reject) => {
+          this.$modal.confirm('当前目录已存在同名文件"' + file.name + '"，是否覆盖？').then(() => {
+            // 用户确认覆盖，继续上传
+            this.proceedUpload(file, resolve, reject);
+          }).catch(() => {
+            // 用户取消上传
+            this.$modal.msgWarning('已取消上传');
+            reject();
+          });
+        });
+      } else {
+        // 没有同名文件，直接上传
+        return this.proceedUpload(file);
+      }
+    },
+    // 执行上传前的校验
+    proceedUpload(file, resolve, reject) {
       // 校检文件类型
       // if (this.fileType) {
       //   const fileName = file.name.split('.');
@@ -729,6 +773,7 @@ export default {
       //   const isTypeOk = this.fileType.indexOf(fileExt) >= 0;
       //   if (!isTypeOk) {
       //     this.$modal.msgError(`文件格式不正确, 请上传${this.fileType.join("/")}格式文件!`);
+      //     if (reject) reject();
       //     return false;
       //   }
       // }
@@ -737,11 +782,13 @@ export default {
         const isLt = file.size / 1024 / 1024 < this.fileSize;
         if (!isLt) {
           this.$modal.msgError(`上传文件大小不能超过 ${this.fileSize} MB!`);
+          if (reject) reject();
           return false;
         }
       }
       this.$modal.loading("正在上传文件，请稍候...");
       this.number++;
+      if (resolve) resolve(true);
       return true;
     },
     // 文件个数超出

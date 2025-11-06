@@ -267,6 +267,9 @@ export default {
         this.queryParams.params["beginCreateTime"] = this.daterangeCreateTime[0];
         this.queryParams.params["endCreateTime"] = this.daterangeCreateTime[1];
       }
+      // 启用自动清理无效文件
+      this.queryParams.autoClean = true;
+      
       listFile(this.queryParams).then(response => {
         this.fileList = response.rows;
         this.total = response.total;
@@ -381,16 +384,35 @@ export default {
     },
     // 上传前校检格式和大小
     handleBeforeUpload(file) {
+      // 检查同名文件
+      const isDuplicate = this.fileList.some(item => item.name === file.name);
+      if (isDuplicate) {
+        return new Promise((resolve, reject) => {
+          this.$modal.confirm('当前目录已存在同名文件"' + file.name + '"，是否覆盖？').then(() => {
+            this.proceedUpload(file, resolve, reject);
+          }).catch(() => {
+            this.$modal.msgWarning('已取消上传');
+            reject();
+          });
+        });
+      } else {
+        return this.proceedUpload(file);
+      }
+    },
+    // 执行上传前的校验
+    proceedUpload(file, resolve, reject) {
       // 校检文件大小
       if (this.fileSize) {
         const isLt = file.size / 1024 / 1024 < this.fileSize;
         if (!isLt) {
           this.$modal.msgError(`上传文件大小不能超过 ${this.fileSize} MB!`);
+          if (reject) reject();
           return false;
         }
       }
       this.$modal.loading("正在上传文件，请稍候...");
       this.number++;
+      if (resolve) resolve(true);
       return true;
     },
     // 文件个数超出

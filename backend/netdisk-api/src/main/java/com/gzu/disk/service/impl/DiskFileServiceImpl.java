@@ -82,10 +82,33 @@ public class DiskFileServiceImpl implements IDiskFileService
     {
         diskFile.setCreateTime(DateUtils.getNowDate());
         validEntityBeforeSave(diskFile);
-        int i = diskFileMapper.verify(diskFile.getName(), diskFile.getParentId(),null, SecurityUtils.getUserId(),"0");
-        if (i>0) throw new ServiceException("名称重复");
-        i = diskFileMapper.verify(diskFile.getName(), diskFile.getParentId(),null, SecurityUtils.getUserId(),"2");
-        if (i>0) throw new ServiceException("与回收站中的重名了");
+        
+        // 检查是否存在同名文件
+        int existCount = diskFileMapper.verify(diskFile.getName(), diskFile.getParentId(), null, SecurityUtils.getUserId(), "0");
+        if (existCount > 0) {
+            // 存在同名文件，查找并删除（移到回收站）
+            log.info("发现同名文件，准备覆盖: {}", diskFile.getName());
+            DiskFile queryFile = new DiskFile();
+            queryFile.setName(diskFile.getName());
+            queryFile.setParentId(diskFile.getParentId());
+            queryFile.setCreateId(SecurityUtils.getUserId());
+            queryFile.setDelFlag("0");
+            
+            List<DiskFile> existFiles = diskFileMapper.selectDiskFileList(queryFile);
+            if (!existFiles.isEmpty()) {
+                DiskFile oldFile = existFiles.get(0);
+                // 先逻辑删除旧文件
+                this.removeDiskFileByIds(new Long[]{oldFile.getId()});
+                log.info("已删除旧文件: {}, ID: {}", oldFile.getName(), oldFile.getId());
+            }
+        }
+        
+        // 检查回收站中是否有同名文件（警告但不阻止）
+        int recycleCount = diskFileMapper.verify(diskFile.getName(), diskFile.getParentId(), null, SecurityUtils.getUserId(), "2");
+        if (recycleCount > 0) {
+            log.warn("回收站中存在同名文件: {}", diskFile.getName());
+        }
+        
         return diskFileMapper.insertDiskFile(diskFile);
     }
 
@@ -105,10 +128,19 @@ public class DiskFileServiceImpl implements IDiskFileService
     {
         diskFile.setUpdateTime(DateUtils.getNowDate());
         validEntityBeforeSave(diskFile);
-        int i = diskFileMapper.verify(diskFile.getName(), diskFile.getParentId(),diskFile.getId(), SecurityUtils.getUserId(),"0");
-        if (i>0) throw new ServiceException("名称重复");
-        i = diskFileMapper.verify(diskFile.getName(), diskFile.getParentId(),null, SecurityUtils.getUserId(),"2");
-        if (i>0) throw new ServiceException("与回收站中的重名了");
+        
+        // 检查是否存在同名文件（排除自己）
+        int existCount = diskFileMapper.verify(diskFile.getName(), diskFile.getParentId(), diskFile.getId(), SecurityUtils.getUserId(), "0");
+        if (existCount > 0) {
+            throw new ServiceException("名称重复");
+        }
+        
+        // 检查回收站中是否有同名文件（警告但不阻止）
+        int recycleCount = diskFileMapper.verify(diskFile.getName(), diskFile.getParentId(), null, SecurityUtils.getUserId(), "2");
+        if (recycleCount > 0) {
+            log.warn("回收站中存在同名文件: {}", diskFile.getName());
+        }
+        
         return diskFileMapper.updateDiskFile(diskFile);
     }
 
@@ -184,6 +216,11 @@ public class DiskFileServiceImpl implements IDiskFileService
     @Override
     public List<DiskFile> selectAllByUserId(Long userId) {
         return diskFileMapper.selectAllByUserId(userId);
+    }
+
+    @Override
+    public List<DiskFile> selectAllByUserIdIgnoreDel(Long userId) {
+        return diskFileMapper.selectAllByUserIdIgnoreDel(userId);
     }
 
     @Override
@@ -352,7 +389,7 @@ public class DiskFileServiceImpl implements IDiskFileService
         log.info("待删除的文件ID列表: {}", delFileIds);
         
         List<DiskFile> allDelFiles = this.selectDiskFileListByIdsIgnoreDel(delFileIds.toArray(new Long[0]));
-        List<DiskFile> allDiskFiles = this.selectAllByUserId(SecurityUtils.getUserId());
+        List<DiskFile> allDiskFiles = this.selectAllByUserIdIgnoreDel(SecurityUtils.getUserId());
         delFileIds.forEach(parentId -> this.getChildPerms(allDiskFiles,allDelFiles,parentId));
         
         log.info("包含子文件后共需删除 {} 个文件", allDelFiles.size());

@@ -88,6 +88,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
     <select id="selectAll" resultMap="DiskFileResult">
         <include refid="selectDiskFileVo"/>
+        where del_flag = 0
     </select>
     <select id="selectDiskFileListByIdsIgnoreDel" resultMap="DiskFileResult">
         <include refid="selectDiskFileVo"/>
@@ -98,19 +99,23 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </select>
     <select id="selectAllByUserId" resultMap="DiskFileResult">
         <include refid="selectDiskFileVo"/>
+        where create_id = #{userId} and del_flag = 0
+    </select>
+    <select id="selectAllByUserIdIgnoreDel" resultMap="DiskFileResult">
+        <include refid="selectDiskFileVo"/>
         where create_id = #{userId}
     </select>
     <select id="typeCapacityStats" resultType="java.util.Map">
-        select type,sum(size) size from disk_file where create_id = #{userId} and type!=5
+        select type,sum(size) size from disk_file where create_id = #{userId} and type!=5 and del_flag = 0
         GROUP BY type
     </select>
     <select id="fileTypeNumStats" resultType="java.util.Map">
-        select type,count(1) num from disk_file where create_id = #{userId}
+        select type,count(1) num from disk_file where create_id = #{userId} and del_flag = 0
         GROUP BY type
     </select>
 
     <select id="selectAllIdsByUserId" resultType="java.lang.Long">
-        select id from disk_file where create_id = #{userId}
+        select id from disk_file where create_id = #{userId} and del_flag = 0
     </select>
 
     <insert id="insertDiskFile" parameterType="DiskFile" useGeneratedKeys="true" keyProperty="id">

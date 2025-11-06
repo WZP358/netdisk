@@ -112,3 +112,20 @@ hdfs:
   user: hadoop
   # HDFS基础路径
   basePath: /netdisk
+
+# 文件一致性检查配置
+disk:
+  consistency:
+    # 是否启用定时检查（true=启用定时任务, false=关闭）
+    # 注意：启用实时检查后，可以关闭定时任务以节省资源
+    enabled: true
+    # 定时任务执行时间（Cron表达式）
+    # 开发环境：每30秒执行一次
+    cron: 0/5 * * * * ?
+    # 是否在列表加载时自动验证文件（true=每次加载列表都验证，false=不验证）
+    autoCleanOnList: true
+  # 文件实时监控配置
+  file-watcher:
+    # 是否启用文件实时监控（true=启用, false=关闭）
+    # 启用后会实时监控文件删除事件，立即删除数据库记录
+    enabled: true

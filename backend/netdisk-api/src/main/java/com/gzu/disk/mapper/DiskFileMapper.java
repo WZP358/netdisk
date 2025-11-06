@@ -80,6 +80,8 @@ public interface DiskFileMapper
 
     List<DiskFile> selectAllByUserId(Long userId);
 
+    List<DiskFile> selectAllByUserIdIgnoreDel(Long userId);
+
     List<Map<String, Object>> typeCapacityStats(Long userId);
 
     List<Map<String, Object>> fileTypeNumStats(Long userId);

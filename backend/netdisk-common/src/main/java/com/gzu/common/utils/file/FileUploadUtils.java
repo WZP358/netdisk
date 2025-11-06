@@ -13,7 +13,6 @@ import com.gzu.common.exception.file.FileSizeLimitExceededException;
 import com.gzu.common.exception.file.InvalidExtensionException;
 import com.gzu.common.utils.DateUtils;
 import com.gzu.common.utils.StringUtils;
-import com.gzu.common.utils.uuid.Seq;
 import com.gzu.common.utils.hdfs.HdfsUtils;
 
 /**
@@ -143,16 +142,19 @@ public class FileUploadUtils
     }
 
     /**
-     * 编码文件名
+     * 编码文件名（保持原始文件名）
      */
     public static final String extractFilename(MultipartFile file,boolean isDatePath)
     {
+        // 获取原始文件名（包含扩展名）
+        String originalFilename = file.getOriginalFilename();
+        
         if (isDatePath) {
-            return StringUtils.format("{}/{}_{}.{}", DateUtils.datePath(),
-                    FilenameUtils.getBaseName(file.getOriginalFilename()), Seq.getId(Seq.uploadSeqType), getExtension(file));
+            // 如果需要日期路径，将文件放在日期目录下，但保持原始文件名
+            return StringUtils.format("{}/{}", DateUtils.datePath(), originalFilename);
         }
-        return StringUtils.format("{}_{}.{}",
-                FilenameUtils.getBaseName(file.getOriginalFilename()), Seq.getId(Seq.uploadSeqType), getExtension(file));
+        // 直接返回原始文件名
+        return originalFilename;
     }
 
     public static final File getAbsoluteFile(String uploadDir, String fileName) throws IOException

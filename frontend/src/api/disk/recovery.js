@@ -51,3 +51,19 @@ export function refresh(id) {
   })
 }
 
+// 一键清空回收站
+export function deleteAll() {
+  return request({
+    url: '/disk/recovery/deleteAll',
+    method: 'delete'
+  })
+}
+
+// 一键恢复回收站所有文件
+export function refreshAll() {
+  return request({
+    url: '/disk/recovery/refreshAll',
+    method: 'put'
+  })
+}
+

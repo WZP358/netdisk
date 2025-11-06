@@ -41,6 +41,24 @@
           v-hasPermi="['disk:recovery:add']"
         >恢复</el-button>
       </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="danger"
+          icon="el-icon-delete"
+          size="mini"
+          @click="handleDeleteAll"
+          v-hasPermi="['disk:recovery:remove']"
+        >一键清空</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="primary"
+          icon="el-icon-refresh-right"
+          size="mini"
+          @click="handleRefreshAll"
+          v-hasPermi="['disk:recovery:add']"
+        >一键恢复</el-button>
+      </el-col>
       <right-toolbar :showSearch.sync="showSearch" @queryTable="dataRefresh"></right-toolbar>
     </el-row>
 
@@ -138,7 +156,7 @@
 </template>
 
 <script>
-import { listRecovery, getRecovery, delRecovery, addRecovery, updateRecovery,refresh } from "@/api/disk/recovery";
+import { listRecovery, getRecovery, delRecovery, addRecovery, updateRecovery, refresh, deleteAll, refreshAll } from "@/api/disk/recovery";
 
 export default {
   name: "Recovery",
@@ -321,6 +339,28 @@ export default {
     },
     mouseLeave(id) {
       this.currentId = -1;
+    },
+    /** 一键清空回收站 */
+    handleDeleteAll() {
+      this.$modal.confirm('是否确认清空回收站所有文件？此操作不可恢复！').then(function() {
+        return deleteAll();
+      }).then(() => {
+        this.resetQuery()
+        this.getList();
+        this.restCheckbox()
+        this.$modal.msgSuccess("清空成功");
+      }).catch(() => {});
+    },
+    /** 一键恢复回收站所有文件 */
+    handleRefreshAll() {
+      this.$modal.confirm('是否确认恢复回收站所有文件？').then(function() {
+        return refreshAll();
+      }).then(() => {
+        this.resetQuery()
+        this.getList();
+        this.restCheckbox()
+        this.$modal.msgSuccess("恢复成功");
+      }).catch(() => {});
     },
   }
 };

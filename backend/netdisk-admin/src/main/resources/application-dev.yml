@@ -121,7 +121,7 @@ disk:
     enabled: true
     # 定时任务执行时间（Cron表达式）
     # 开发环境：每30秒执行一次
-    cron: 0/5 * * * * ?
+    cron: 0/40 * * * * ?
     # 是否在列表加载时自动验证文件（true=每次加载列表都验证，false=不验证）
     autoCleanOnList: true
   # 文件实时监控配置

@@ -16,9 +16,7 @@
           <div style="margin-top: 10px" v-else> 有效期到 {{ parseTime(shareInfo.expirationTime, '{y}-{m}-{d} {h}:{i}:{s}') }}
           </div>
           <div style="margin-top: 10px">
-            分享方式:
-            <span v-if="shareInfo.type==='0'">私密</span>
-            <span v-else>公开</span>
+            分享方式: 私密
           </div>
         </div>
       </el-row>
@@ -129,7 +127,7 @@
       该文件夹为空
     </div>
 
-    <div class="border-effect share-info-check" v-if="!queryFileOk&&shareInfo.type==='0'">
+    <div class="border-effect share-info-check" v-if="!queryFileOk">
       <el-row style="width: 100%;border-bottom: 2px solid #007bff;">
         <div style="width: 80px;height: 100px;float: left">
           <img class="user-avatar" :src="baseUrl+shareInfo.sysUser.avatar"/>
@@ -145,9 +143,7 @@
           <div style="margin-top: 10px" v-else> 有效期到 {{ parseTime(shareInfo.expirationTime, '{y}-{m}-{d} {h}:{i}:{s}') }}
           </div>
           <div style="margin-top: 10px">
-            分享方式:
-            <span v-if="shareInfo.type==='0'">私密</span>
-            <span v-else>公开</span>
+            分享方式: 私密
           </div>
         </div>
       </el-row>
@@ -233,9 +229,6 @@ export default {
       this.loading = true;
       getInfo(this.queryParams.uuid).then(response => {
         this.shareInfo = response.data;
-        if (this.shareInfo.type==='1') {
-          this.getShareFileList();
-        }
         this.loading = false;
       });
     },

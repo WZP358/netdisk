@@ -330,11 +330,7 @@
     <el-dialog :title="title" :visible.sync="openShare" width="500px" append-to-body>
       <div v-if="shareOk===false">
         <el-form ref="shareFrom" :model="shareFrom" :rules="shareRules" label-width="80px">
-          <el-form-item label="分享方式：">
-            <el-radio v-model="shareFrom.type" label="0">私密</el-radio>
-            <el-radio v-model="shareFrom.type" label="1">公开</el-radio>
-          </el-form-item>
-          <el-form-item v-if="shareFrom.type==='0'" label="提取码" prop="secretKey">
+          <el-form-item label="提取码" prop="secretKey">
             <el-radio v-model="shareFrom.secretKeyRadio" label="1">系统生成</el-radio>
             <el-radio v-model="shareFrom.secretKeyRadio" label="2">自定义</el-radio>
             <el-input v-if="shareFrom.secretKeyRadio==='2'" v-model="shareFrom.secretKey" placeholder="请输入" />
@@ -368,7 +364,7 @@
             <div>{{shareBaseUrl + 'uuid=' +shareResult.uuid}}</div>
           </div>
 
-          <div style="margin-top: 10px" v-if="shareResult.type==='0'">
+          <div style="margin-top: 10px">
             提取码
             <el-input v-model="shareResult.secretKey" :disabled="true" />
           </div>
@@ -382,19 +378,11 @@
         </div>
         <div slot="footer" class="dialog-footer">
           <el-button
-            v-if="shareResult.type==='1'"
-            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + (shareResult.remark ? '   ' + shareResult.remark : '')"
-            v-clipboard:success="copySuccess"
-            v-clipboard:error="copyFailed"
-          >复制</el-button>
-          <el-button
-            v-if="shareResult.type==='0'"
             v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '   提取码：'+ shareResult.secretKey + (shareResult.remark ? '   ' + shareResult.remark : '')"
             v-clipboard:success="copySuccess"
             v-clipboard:error="copyFailed"
           >复制</el-button>
           <el-button
-            v-if="shareResult.type==='0'"
             v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '&secretKey='+shareResult.secretKey + (shareResult.remark ? '   ' + shareResult.remark : '')"
             v-clipboard:success="copySuccess"
             v-clipboard:error="copyFailed"

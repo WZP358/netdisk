@@ -1,7 +1,17 @@
 <template>
   <div class="login">
+    <video
+      class="bg-video"
+      autoplay
+      muted
+      loop
+      playsinline
+      ref="bgVideoRef"
+    >
+      <source :src="bgVideo" type="video/mp4" />
+    </video>
     <el-form ref="loginForm" :model="loginForm" :rules="loginRules" class="login-form">
-      <h3 class="title">鸿枫网盘</h3>
+      <h3 class="title">个人网盘</h3>
       <el-form-item prop="username">
         <el-input
           v-model="loginForm.username"
@@ -56,7 +66,7 @@
     </el-form>
     <!--  底部  -->
     <div class="el-login-footer">
-      <span>Copyright © 2024-2030 鸿枫网盘 All Rights Reserved.</span>
+      <span>基于 Hadoop 的个人网盘</span>
     </div>
   </div>
 </template>
@@ -70,6 +80,7 @@ export default {
   name: "Login",
   data() {
     return {
+      bgVideo: require("@/assets/images/背景.mp4"),
       codeUrl: "",
       loginForm: {
         username: "",
@@ -106,6 +117,14 @@ export default {
   created() {
     this.getCode();
     this.getCookie();
+  },
+  mounted() {
+    // 某些浏览器需要主动触发 play
+    this.$nextTick(() => {
+      try {
+        this.$refs.bgVideoRef && this.$refs.bgVideoRef.play && this.$refs.bgVideoRef.play().catch(() => {});
+      } catch (e) {}
+    });
   },
   methods: {
     getCode() {
@@ -161,8 +180,17 @@ export default {
   justify-content: center;
   align-items: center;
   height: 100%;
-  background-image: url("../assets/images/login-background.jpg");
-  background-size: cover;
+  background-color: #000;
+  position: relative;
+}
+.bg-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
 }
 .title {
   margin: 0px auto 30px auto;
@@ -171,8 +199,10 @@ export default {
 }
 
 .login-form {
+  position: relative;
+  z-index: 1;
   border-radius: 6px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.4);
   width: 400px;
   padding: 25px 25px 5px 25px;
   .el-input {

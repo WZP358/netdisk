@@ -48,7 +48,10 @@ export function listFileByUUIDAndsecretKey(query,parentId) {
   return request({
     url: '/disk/file/listFileByUUIDAndsecretKey/'+parentId,
     method: 'get',
-    params: query
+    params: query,
+    headers: {
+      isToken: false
+    }
   })
 }
 

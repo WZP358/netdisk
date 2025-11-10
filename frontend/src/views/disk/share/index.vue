@@ -124,7 +124,7 @@
             size="mini"
             type="text"
             v-if="scope.row.type==='1'"
-            v-clipboard:copy="shareBaseUrl+'uuid=' + scope.row.uuid +'   ' + scope.row.remark"
+            v-clipboard:copy="shareBaseUrl+'uuid=' + scope.row.uuid + (scope.row.remark ? '   ' + scope.row.remark : '')"
             v-clipboard:success="copySuccess"
             v-clipboard:error="copyFailed"
           >复制</el-button>
@@ -132,7 +132,7 @@
             size="mini"
             type="text"
             v-if="scope.row.type==='0'"
-            v-clipboard:copy="shareBaseUrl+'uuid=' + scope.row.uuid +'   提取码：'+scope.row.secretKey+ '   ' + scope.row.remark"
+            v-clipboard:copy="shareBaseUrl+'uuid=' + scope.row.uuid +'   提取码：'+scope.row.secretKey + (scope.row.remark ? '   ' + scope.row.remark : '')"
             v-clipboard:success="copySuccess"
             v-clipboard:error="copyFailed"
           >复制</el-button>
@@ -141,7 +141,7 @@
             size="mini"
             type="text"
             v-if="scope.row.type==='0'"
-            v-clipboard:copy="shareBaseUrl+'uuid=' + scope.row.uuid + '&secretKey='+scope.row.secretKey + '      ' + scope.row.remark"
+            v-clipboard:copy="shareBaseUrl+'uuid=' + scope.row.uuid + '&secretKey='+scope.row.secretKey + (scope.row.remark ? '   ' + scope.row.remark : '')"
             v-clipboard:success="copySuccess"
             v-clipboard:error="copyFailed"
           >复制（免填分享码）</el-button>
@@ -221,19 +221,19 @@
         <div slot="footer" class="dialog-footer">
           <el-button
             v-if="shareResult.type==='1'"
-            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '      ' + shareResult.remark"
+            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + (shareResult.remark ? '   ' + shareResult.remark : '')"
             v-clipboard:success="copySuccess"
             v-clipboard:error="copyFailed"
           >复制</el-button>
           <el-button
             v-if="shareResult.type==='0'"
-            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '   提取码：'+ shareResult.secretKey + '      ' + shareResult.remark"
+            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '   提取码：'+ shareResult.secretKey + (shareResult.remark ? '   ' + shareResult.remark : '')"
             v-clipboard:success="copySuccess"
             v-clipboard:error="copyFailed"
           >复制</el-button>
           <el-button
             v-if="shareResult.type==='0'"
-            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '&secretKey='+shareResult.secretKey   + '      ' + shareResult.remark"
+            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '&secretKey='+shareResult.secretKey + (shareResult.remark ? '   ' + shareResult.remark : '')"
             v-clipboard:success="copySuccess"
             v-clipboard:error="copyFailed"
           >复制(免填提取码)</el-button>

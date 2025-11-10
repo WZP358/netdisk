@@ -383,19 +383,19 @@
         <div slot="footer" class="dialog-footer">
           <el-button
             v-if="shareResult.type==='1'"
-            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '      ' + shareResult.remark"
+            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + (shareResult.remark ? '   ' + shareResult.remark : '')"
             v-clipboard:success="copySuccess"
             v-clipboard:error="copyFailed"
           >复制</el-button>
           <el-button
             v-if="shareResult.type==='0'"
-            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '   提取码：'+ shareResult.secretKey + '      ' + shareResult.remark"
+            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '   提取码：'+ shareResult.secretKey + (shareResult.remark ? '   ' + shareResult.remark : '')"
             v-clipboard:success="copySuccess"
             v-clipboard:error="copyFailed"
           >复制</el-button>
           <el-button
             v-if="shareResult.type==='0'"
-            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '&secretKey='+shareResult.secretKey   + '      ' + shareResult.remark"
+            v-clipboard:copy="shareBaseUrl + 'uuid=' + shareResult.uuid + '&secretKey='+shareResult.secretKey + (shareResult.remark ? '   ' + shareResult.remark : '')"
             v-clipboard:success="copySuccess"
             v-clipboard:error="copyFailed"
           >复制(免填提取码)</el-button>

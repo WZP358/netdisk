@@ -13,7 +13,10 @@ export function listShare(query) {
 export function getInfo(uuid) {
   return request({
     url: '/disk/share/info/'+uuid,
-    method: 'get'
+    method: 'get',
+    headers: {
+      isToken: false
+    }
   })
 }
 
@@ -56,7 +59,10 @@ export function listByUUIDAndsecretKey(query) {
   return request({
     url: '/disk/share/listByUUIDAndsecretKey',
     method: 'get',
-    params: query
+    params: query,
+    headers: {
+      isToken: false
+    }
   })
 }
 

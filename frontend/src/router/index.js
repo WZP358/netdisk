@@ -89,18 +89,11 @@ export const constantRoutes = [
     ]
   },
   {
-    path: '/external/share',
-    component: Layout,
+    path: '/external/share/share-list',
+    component: () => import('@/views/disk/share/share-list'),
     hidden: true,
-    redirect: 'noredirect',
-    children: [
-      {
-        path: 'share-list',
-        component: () => import('@/views/disk/share/share-list'),
-        name: 'share-list',
-        meta: { title: '分享' }
-      }
-    ]
+    name: 'share-list',
+    meta: { title: '分享' }
   },
   {
     path: '/disk/preview',

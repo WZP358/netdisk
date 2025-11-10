@@ -14,6 +14,7 @@ import com.gzu.common.utils.StringUtils;
 import com.gzu.common.utils.file.FileUploadUtils;
 import com.gzu.common.utils.file.FileUtils;
 import com.gzu.common.utils.file.MimeTypeUtils;
+import com.gzu.common.utils.hdfs.HdfsUtils;
 import com.gzu.disk.domain.DiskStorage;
 import com.gzu.disk.service.IDiskSensitiveWordService;
 import com.gzu.disk.service.IDiskStorageService;
@@ -81,6 +82,9 @@ public class DiskFileServiceImpl implements IDiskFileService
     public int insertDiskFile(DiskFile diskFile)
     {
         diskFile.setCreateTime(DateUtils.getNowDate());
+        if (StringUtils.isEmpty(diskFile.getDelFlag())) {
+            diskFile.setDelFlag("0");
+        }
         validEntityBeforeSave(diskFile);
         
         // 检查是否存在同名文件
@@ -124,10 +128,193 @@ public class DiskFileServiceImpl implements IDiskFileService
      * @return 结果
      */
     @Override
+    @Transactional
     public int updateDiskFile(DiskFile diskFile)
     {
         diskFile.setUpdateTime(DateUtils.getNowDate());
         validEntityBeforeSave(diskFile);
+        
+        if (diskFile.getId() != null && StringUtils.isNotEmpty(diskFile.getName())) {
+            DiskFile old = diskFileMapper.selectDiskFileById(diskFile.getId());
+            if (old != null && StringUtils.isNotEmpty(old.getUrl())
+                    && !diskFile.getName().equals(old.getName())) {
+                
+                String oldUrl = old.getUrl();
+                String relative = StringUtils.substringAfter(oldUrl, Constants.RESOURCE_PREFIX);
+                
+                if (StringUtils.isNotEmpty(relative)) {
+                    // 判断是文件还是文件夹
+                    if (old.getIsDir() != null && old.getIsDir() == 1) {
+                        // ========== 文件夹重命名 ==========
+                        log.info("========== 开始重命名文件夹 ==========");
+                        log.info("文件夹ID: {}", diskFile.getId());
+                        log.info("旧名称: {} -> 新名称: {}", old.getName(), diskFile.getName());
+                        log.info("旧URL: {}", oldUrl);
+                        
+                        try {
+                            // 1. 解析路径（relative 格式: /upload/admin/文件夹名）
+                            // 提取文件夹名和父路径
+                            String oldFolderPath = relative; // 例如: /upload/admin/旧文件夹名
+                            String parentPath = "";
+                            
+                            if (oldFolderPath.contains("/")) {
+                                int lastSlash = oldFolderPath.lastIndexOf('/');
+                                parentPath = oldFolderPath.substring(0, lastSlash); // 例如: /upload/admin
+                            }
+                            
+                            String newFolderName = diskFile.getName();
+                            String newFolderPath = StringUtils.isNotEmpty(parentPath) 
+                                    ? parentPath + "/" + newFolderName 
+                                    : "/" + newFolderName;
+                            
+                            log.info("旧文件夹路径: {}", oldFolderPath);
+                            log.info("新文件夹路径: {}", newFolderPath);
+                            
+                            // 2. 重命名物理文件夹
+                            if (HdfsUtils.isHdfsEnabled()) {
+                                String src = HdfsUtils.buildHdfsPath(oldFolderPath);
+                                String dst = HdfsUtils.buildHdfsPath(newFolderPath);
+                                log.info("HDFS重命名: {} -> {}", src, dst);
+                                boolean ok = HdfsUtils.rename(src, dst);
+                                if (!ok) {
+                                    throw new ServiceException("重命名HDFS文件夹失败");
+                                }
+                            } else {
+                                String localBase = RuoYiConfig.getProfile();
+                                // 直接拼接，因为 relative 已经包含开头的 /
+                                String oldAbs = localBase + oldFolderPath;
+                                String newAbs = localBase + newFolderPath;
+                                log.info("本地重命名: {} -> {}", oldAbs, newAbs);
+                                
+                                java.io.File oldFolder = new java.io.File(oldAbs);
+                                java.io.File newFolder = new java.io.File(newAbs);
+                                
+                                if (!oldFolder.exists()) {
+                                    log.warn("文件夹不存在，可能已被删除: {}", oldAbs);
+                                } else {
+                                    // 确保父目录存在
+                                    if (newFolder.getParentFile() != null && !newFolder.getParentFile().exists()) {
+                                        newFolder.getParentFile().mkdirs();
+                                    }
+                                    boolean ok = oldFolder.renameTo(newFolder);
+                                    if (!ok) {
+                                        throw new ServiceException("重命名本地文件夹失败: " + oldAbs + " -> " + newAbs);
+                                    }
+                                    log.info("✓ 物理文件夹重命名成功");
+                                }
+                            }
+                            
+                            // 3. 更新文件夹本身的URL
+                            // URL格式: /profile/upload/admin/文件夹名
+                            String newUrl = Constants.RESOURCE_PREFIX + newFolderPath;
+                            diskFile.setUrl(newUrl);
+                            log.info("更新文件夹URL: {} -> {}", oldUrl, newUrl);
+                            
+                            // 4. 获取所有子文件和子文件夹
+                            List<DiskFile> allFiles = this.selectAllByUserIdIgnoreDel(SecurityUtils.getUserId());
+                            List<DiskFile> allChildren = new ArrayList<>();
+                            this.getChildPerms(allFiles, allChildren, diskFile.getId());
+                            
+                            log.info("找到 {} 个子文件/文件夹需要更新路径", allChildren.size());
+                            
+                            // 5. 批量更新所有子项的URL（将旧路径前缀替换为新路径前缀）
+                            // 注意：需要精确匹配路径，避免误替换
+                            String oldUrlPrefix = oldUrl; // 例如: /profile/upload/admin/旧文件夹名
+                            String newUrlPrefix = newUrl; // 例如: /profile/upload/admin/新文件夹名
+                            
+                            int updatedCount = 0;
+                            for (DiskFile child : allChildren) {
+                                if (StringUtils.isNotEmpty(child.getUrl())) {
+                                    String oldChildUrl = child.getUrl();
+                                    // 精确匹配：子项的URL必须以旧URL开头，且下一个字符是/或者是URL结尾
+                                    if (oldChildUrl.startsWith(oldUrlPrefix)) {
+                                        // 检查是否是直接的子项（路径精确匹配）
+                                        String remaining = oldChildUrl.substring(oldUrlPrefix.length());
+                                        if (remaining.isEmpty() || remaining.startsWith("/")) {
+                                            String newChildUrl = newUrlPrefix + remaining;
+                                            
+                                            // 更新数据库
+                                            DiskFile updateChild = new DiskFile();
+                                            updateChild.setId(child.getId());
+                                            updateChild.setUrl(newChildUrl);
+                                            diskFileMapper.updateDiskFile(updateChild);
+                                            updatedCount++;
+                                            
+                                            log.debug("更新子项URL: {} -> {}", oldChildUrl, newChildUrl);
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            log.info("✓ 已更新 {} 个子文件/文件夹的路径", updatedCount);
+                            log.info("========== 文件夹重命名完成 ==========");
+                            
+                        } catch (ServiceException se) {
+                            throw se;
+                        } catch (Exception e) {
+                            log.error("重命名文件夹失败", e);
+                            throw new ServiceException("重命名文件夹失败: " + e.getMessage());
+                        }
+                        
+                    } else if (old.getIsDir() != null && old.getIsDir() == 0) {
+                        // ========== 文件重命名 ==========
+                        log.info("========== 开始重命名文件 ==========");
+                        log.info("文件ID: {}", diskFile.getId());
+                        log.info("旧名称: {} -> 新名称: {}", old.getName(), diskFile.getName());
+                        
+                        if (relative.contains("/")) {
+                            // relative 格式: /upload/admin/文件名
+                            String dirRel = relative.substring(0, relative.lastIndexOf('/'));
+                            String newFileName = diskFile.getName();
+                            String newRelative = dirRel + "/" + newFileName;
+
+                            try {
+                                if (HdfsUtils.isHdfsEnabled()) {
+                                    String src = HdfsUtils.buildHdfsPath(relative);
+                                    String dst = HdfsUtils.buildHdfsPath(newRelative);
+                                    boolean ok = HdfsUtils.rename(src, dst);
+                                    if (!ok) {
+                                        throw new ServiceException("重命名HDFS文件失败");
+                                    }
+                                } else {
+                                    String localBase = RuoYiConfig.getProfile();
+                                    // 直接拼接，因为 relative 已经包含开头的 /
+                                    String oldAbs = localBase + relative;
+                                    String newAbs = localBase + newRelative;
+                                    java.io.File srcFile = new java.io.File(oldAbs);
+                                    java.io.File dstFile = new java.io.File(newAbs);
+                                    // 确保父目录存在
+                                    if (dstFile.getParentFile() != null && !dstFile.getParentFile().exists()) {
+                                        dstFile.getParentFile().mkdirs();
+                                    }
+                                    boolean ok = srcFile.renameTo(dstFile);
+                                    if (!ok) {
+                                        throw new ServiceException("重命名本地文件失败");
+                                    }
+                                }
+                                // 更新url为新的相对路径
+                                diskFile.setUrl(Constants.RESOURCE_PREFIX + newRelative);
+
+                                // 根据后缀重算type
+                                String newName = newFileName;
+                                String ext = newName.contains(".") ? newName.substring(newName.lastIndexOf('.') + 1) : "";
+                                if (StringUtils.isNotEmpty(ext)) {
+                                    Integer newType = this.getType(ext);
+                                    diskFile.setType(newType);
+                                }
+                                
+                                log.info("========== 文件重命名完成 ==========");
+                            } catch (ServiceException se) {
+                                throw se;
+                            } catch (Exception e) {
+                                log.error("重命名文件失败", e);
+                                throw new ServiceException("重命名文件失败: " + e.getMessage());
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
         // 检查是否存在同名文件（排除自己）
         int existCount = diskFileMapper.verify(diskFile.getName(), diskFile.getParentId(), diskFile.getId(), SecurityUtils.getUserId(), "0");

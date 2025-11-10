@@ -194,7 +194,7 @@ export default {
         uuid: null,
         secretKey: null
       },
-      parentId: null,
+      parentId: 0,
       uuid: '',
       secretKey: '',
       allCrumbsList: [],

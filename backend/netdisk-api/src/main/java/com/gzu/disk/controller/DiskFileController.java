@@ -241,7 +241,19 @@ public class DiskFileController extends BaseController
     @PutMapping
     public AjaxResult edit(@RequestBody DiskFile diskFile)
     {
-        return toAjax(diskFileService.updateDiskFile(diskFile));
+        int result = diskFileService.updateDiskFile(diskFile);
+        
+        // 重新加载文件监控（如果启用），因为文件夹重命名会改变路径
+        if (result > 0 && fileWatcherService != null && fileWatcherService.isWatching()) {
+            try {
+                fileWatcherService.reloadWatchDirectories();
+                log.info("已重新加载文件监控（文件夹/文件重命名后）");
+            } catch (Exception e) {
+                log.warn("重新加载文件监控失败", e);
+            }
+        }
+        
+        return toAjax(result);
     }
 
     /**

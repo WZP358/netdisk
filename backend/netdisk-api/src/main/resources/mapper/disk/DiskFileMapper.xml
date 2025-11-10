@@ -65,7 +65,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
                 and name=#{name}
             </if>
             <if test="id != null">
-                and id = #{id}
+                and id != #{id}
             </if>
             <if test="delFlag != null">
                 and del_flag = #{delFlag}
@@ -134,7 +134,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="updateId != null">update_id,</if>
             <if test="updateTime != null">update_time,</if>
             <if test="remark != null">remark,</if>
-            <if test="delFlag != null">del_flag,</if>
+            del_flag,
          </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
             <if test="name != null">#{name},</if>
@@ -150,7 +150,7 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
             <if test="updateId != null">#{updateId},</if>
             <if test="updateTime != null">#{updateTime},</if>
             <if test="remark != null">#{remark},</if>
-            <if test="delFlag != null">#{delFlag},</if>
+            COALESCE(#{delFlag}, '0'),
          </trim>
     </insert>
 
